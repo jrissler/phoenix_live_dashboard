@@ -15,7 +15,9 @@ defmodule Phoenix.LiveDashboard.ChartComponent do
         assign(socket,
           title: chart_title(metric),
           kind: chart_kind(metric.__struct__),
-          label: chart_label(metric)
+          label: chart_label(metric),
+          tags: Enum.join(metric.tags, "-"),
+          unit: chart_unit(metric.unit)
         )
       else
         socket
@@ -38,7 +40,9 @@ defmodule Phoenix.LiveDashboard.ChartComponent do
              phx-update="ignore"
              data-label="<%= @label %>"
              data-metric="<%= @kind %>"
-             data-title="<%= @title %>">
+             data-title="<%= @title %>"
+             data-tags="<%= @tags %>"
+             data-unit="<%= @unit %>">
         </div>
       </div>
     </div>
@@ -64,16 +68,20 @@ defmodule Phoenix.LiveDashboard.ChartComponent do
     metric.name
     |> List.last()
     |> Phoenix.Naming.humanize()
-    |> Kernel.<>("#{humanize_unit(metric.unit)}")
+    |> Kernel.<>("#{label_suffix(metric.unit)}")
   end
 
-  defp humanize_unit(:byte), do: " (bytes)"
-  defp humanize_unit(:kilobyte), do: " (KB)"
-  defp humanize_unit(:megabyte), do: " (MB)"
-  defp humanize_unit(:nanosecond), do: " (ns)"
-  defp humanize_unit(:microsecond), do: " (µs)"
-  defp humanize_unit(:millisecond), do: " (ms)"
-  defp humanize_unit(:second), do: " s"
-  defp humanize_unit(:unit), do: ""
-  defp humanize_unit(unit) when is_atom(unit), do: " (#{unit})"
+  defp label_suffix(:second), do: " #{chart_unit(:second)}"
+  defp label_suffix(:unit), do: ""
+  defp label_suffix(unit) when is_atom(unit), do: " (#{chart_unit(unit)})"
+
+  defp chart_unit(:byte), do: "bytes"
+  defp chart_unit(:kilobyte), do: "KB"
+  defp chart_unit(:megabyte), do: "MB"
+  defp chart_unit(:nanosecond), do: "ns"
+  defp chart_unit(:microsecond), do: "µs"
+  defp chart_unit(:millisecond), do: "ms"
+  defp chart_unit(:second), do: "s"
+  defp chart_unit(:unit), do: ""
+  defp chart_unit(unit) when is_atom(unit), do: unit
 end
