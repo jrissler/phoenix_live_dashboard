@@ -1,4 +1,4 @@
-import ColorWheel from './color_wheel'
+import { ColorWheel, LineColor } from './color_wheel'
 import _css from 'uplot/dist/uPlot.min.css'
 /** We are importing uPlot locally until the new API is released */
 import uPlot from './uPlot.esm'
@@ -48,6 +48,12 @@ const DatasetFns = {
   }
 }
 
+const Values = ({ unit }) => {
+  return {
+    values: (u, vals, space) => vals.map(v => +v.toFixed(2) + ` ${unit}`),
+  }
+}
+
 /** Chart.js Configs **/
 
 const DoughnutConfig = (options) => {
@@ -87,11 +93,7 @@ const TimeseriesConfig = (options) => {
     width: options.width, // configured?
     height: options.height, // configured?
     series: [
-      {},
-      {
-        stroke: ColorWheel.at(0),
-        width: 2
-      }
+      {}
     ],
     scales: {
       x: {
@@ -100,7 +102,7 @@ const TimeseriesConfig = (options) => {
       },
       y: {
         min: 0,
-        max: 0.3,
+        max: 1,
       },
     },
     axes: [
@@ -113,27 +115,19 @@ const TimeseriesConfig = (options) => {
           dash: [],
         }
       },
-      // {
-      //   show: true,
-      //   label: options.label,
-      //   size: 70,
-      //   scale: 'kb',
-      //   values: (u, vals, space) => vals.map(v => +v.toFixed(2) + " KB"),
-      // },
       {
+        scale: options.unit,
         show: true,
-        label: options.label,
-        size: 70,
-        auto: true,
-        values: (u, vals, space) => vals.map(v => +(v * 1000).toFixed(0) + " ms"),
-        space: 15,
         grid: {
           show: true,
           stroke: "#eee",
           width: 1,
           dash: [],
-        }
-      },
+        },
+        size: 70,
+        space: 15,
+        ...Values(options)
+      }
     ]
   }
 }
@@ -236,75 +230,48 @@ const __METRICS__ = {
   summary: Summary
 }
 
-function datasetToData(datasets) {
-  datasets = datasets.slice(0)
-  if (datasets.length < 2) {
-    datasets.push({ data: [] })
-  }
-  return datasets.map(({ data }) => data)
-}
-
-function datasetToSeries({ key }, index) {
-  return {
-    label: key,
-    value: (u, v) => v == null ? "-" : (v * 1000).toFixed(0) + " ms",
-    stroke: ColorWheel.at(index - 1),
-    width: 2
-  }
-}
-
 class TelemetryChart {
   constructor(elementOrContext, { metric: metric, ...options }) {
     this.instrument = Instrument.create(options)
     this.metric = new __METRICS__[metric](this.instrument, options)
     this.datasets = [
-      { key: "time", data: [] }
-    ];
-    console.log(this.datasets, datasetToData(this.datasets))
-    this.elementOrContext = elementOrContext
-    this.chart = new uPlot(this.instrument.config, datasetToData(this.datasets), elementOrContext)
+      { key: "|x|", data: [] }
+    ]
+    this.chart = new uPlot(this.instrument.config, [[], []], elementOrContext)
+    // Delete the auto-generated series
+    this.chart.delSeries(this.chart.series.length - 1)
   }
 
   pushData(data) {
-    if (!data.length) return;
+    if (!data.length) return
 
-    data.forEach((item) => {
-      let { z: dateString, y: valueString, x: key } = item;
-      let ts_seconds = (new Date(dateString)).getTime() / 1000;
-      let foundKey = false;
+    data.forEach(({ z: dateString, y: valueString, x: key }) => {
+      let ts_seconds = (new Date(dateString)).getTime() / 1000
       let value = parseFloat(valueString)
+
+      // Find or create the series from the x-axis value
+      let seriesIndex = this.datasets.findIndex(({ key: seriesKey }) => seriesKey === key)
+      if (seriesIndex === -1) {
+        seriesIndex = this.datasets.push({ key, data: Array(this.datasets[0].data.length).fill(null) }) - 1
+        this.chart.addSeries({
+          label: key,
+          ...LineColor.at(seriesIndex - 1)
+        }, seriesIndex)
+      }
 
       this.datasets = this.datasets.map((dataset, index) => {
         if (index == 0) {
           dataset.data.push(ts_seconds)
-        } else if (dataset.key == key && !foundKey) {
-          foundKey = true;
+        } else if (dataset.key == key) {
           dataset.data.push(value)
         } else {
           dataset.data.push(null)
         }
         return dataset
       })
-
-      if (!foundKey) {
-        let data = Array(this.datasets[0].data.length)
-          .fill(null)
-        data.splice(-1, 1, value)
-        this.datasets.push({ key, data })
-
-        this.elementOrContext.innerHTML = ''
-        this.chart = new uPlot(this.instrument.config, datasetToData(this.datasets), this.elementOrContext)
-      }
     })
 
-    console.log(this.datasets, datasetToData(this.datasets), this.chart.series)
-
-    this.chart.setData(datasetToData(this.datasets))
-
-    // Gives the metric the opportunity to cancel the redraw.
-    // if (this.metric.pushData(data) !== false) {
-    //   this.chart.update()
-    // }
+    this.chart.setData(this.datasets.slice(0).map(({ data }) => data))
   }
 }
 
@@ -313,12 +280,15 @@ class TelemetryChart {
 const PhxChartComponent = {
   mounted() {
     let wrapper = this.el.parentElement.querySelector('.chart')
-    let size = wrapper.getBoundingClientRect();
-    let options = Object.assign({}, wrapper.dataset)
-    options['instrument'] = options['metric'] === 'summary' ? 'timeseries' : 'doughnut'
-    options['width'] = size.width;
-    options['height'] = 300;
-    options['now'] = (new Date()).getTime() / 1000;
+    let size = wrapper.getBoundingClientRect()
+    let options = Object.assign({}, wrapper.dataset, {
+      instrument: 'timeseries',
+      tagged: (wrapper.dataset.tags && wrapper.dataset.tags !== "") || false,
+      width: size.width,
+      height: 300,
+      now: (new Date()).getTime() / 1000
+    })
+
     this.chart = new TelemetryChart(wrapper, options)
   },
   updated() {
