@@ -41,6 +41,9 @@
     "webpack-cli": "^3.3.10"
   },
   "jest": {
-    "testRegex": "/test/.*_test\\.js$"
+    "testRegex": "/test/.*_test\\.js$",
+    "moduleNameMapper": {
+      "\\.(css)$": "<rootDir>/test/__mocks__/styleMock.js"
+    }
   }
 }
