@@ -1,6 +1,7 @@
 import ColorWheel from './color_wheel'
 import _css from 'uplot/dist/uPlot.min.css'
-import uPlot from 'uplot'
+/** We are importing uPlot locally until the new API is released */
+import uPlot from './uPlot.esm'
 
 /** Chart.js Storage Adapters **/
 
