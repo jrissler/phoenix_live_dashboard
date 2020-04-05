@@ -1,7 +1,7 @@
 import { ColorWheel, LineColor } from './color_wheel'
 import _css from 'uplot/dist/uPlot.min.css'
 /** We are importing uPlot locally until the new API is released */
-import uPlot from './uPlot.esm'
+import uPlot from 'uplot'
 
 /** Chart.js Storage Adapters **/
 
